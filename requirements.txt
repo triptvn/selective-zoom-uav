@@ -1,0 +1,9 @@
+ultralytics==8.4.131
+torch>=2.4
+torchvision
+pycocotools>=2.0.7
+opencv-python
+numpy
+scipy
+pyyaml
+pillow
