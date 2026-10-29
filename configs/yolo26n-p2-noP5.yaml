@@ -1,4 +1,4 @@
-# YOLO26n-P2 without the P5 head ("A1" in the paper), 1.74 M parameters with 10 classes.
+# YOLO26n-P2 without the P5 head (Y_F in the paper; called A1 during the experiments), 1.74 M parameters with 10 classes.
 # Derived from Ultralytics yolo26-p2.yaml (AGPL-3.0, https://ultralytics.com/license).
 # The P5 backbone stage (SPPF + C2PSA) is kept: it still feeds the top-down path and lets the
 # COCO weights of yolo26n.pt load unchanged. Only the PAN stage to P5 and the stride-32 head are removed.

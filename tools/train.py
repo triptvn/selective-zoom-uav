@@ -4,7 +4,7 @@ Defaults: 896 px, batch 8 (nominal batch 64), COCO initialisation, MuSGD with a 
 The optimizer is fixed on purpose: Ultralytics' "auto" switches to AdamW for runs under 10k steps,
 which would change the recipe between the 50- and 100-epoch schedules.
 
-  # proposed detector (A1 + ZT), step-matched to a 100-epoch baseline
+  # proposed detector (Y_F + Z_T; called A1 + ZT during the experiments), step-matched to a 100-epoch baseline
   python tools/train.py --model configs/yolo26n-p2-noP5.yaml --data data/VisDrone_ZT/data.yaml --epochs 54 --seed 0
   # baseline
   python tools/train.py --model yolo26n-p2.yaml --data data/VisDrone/data.yaml --epochs 100 --seed 0

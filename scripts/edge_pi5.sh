@@ -13,8 +13,8 @@ for sz in 896 1088; do
   mv "${W%.pt}_ncnn_model" "${n}_${sz}_ncnn_model"
 done
 python tools/latency.py --weights ${n}_896_ncnn_model --images data/VisDrone/images/test --n 100 --warmup 10 --device cpu \
-  --configs single@896,z1@896,sahi@896 --out results/pi5/${n}_896.json
+  --configs single@896,zs@896,sahi@896 --out results/pi5/${n}_896.json
 python tools/latency.py --weights ${n}_1088_ncnn_model --images data/VisDrone/images/test --n 100 --warmup 10 --device cpu \
-  --configs single@1088,z1@1088 --out results/pi5/${n}_1088.json
-python tools/evaluate.py --weights ${n}_896_ncnn_model --data data/VisDrone/data.yaml --split test --modes single,z1 \
+  --configs single@1088,zs@1088 --out results/pi5/${n}_1088.json
+python tools/evaluate.py --weights ${n}_896_ncnn_model --data data/VisDrone/data.yaml --split test --modes single,zs \
   --out results/pi5/${n}_896_acc.json

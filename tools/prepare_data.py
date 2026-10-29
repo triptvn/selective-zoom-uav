@@ -1,4 +1,4 @@
-"""Prepare VisDrone2019-DET, the UAVDT subset and the zoom-aware (ZT) variants.
+"""Prepare VisDrone2019-DET, the UAVDT subset and the zoom-aware training (Z_T) variants.
 
   python tools/prepare_data.py visdrone --root data/VisDrone
   python tools/prepare_data.py uavdt --src /path/to/UAVDT-DET-ig --root data/UAVDT

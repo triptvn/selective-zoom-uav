@@ -1,4 +1,4 @@
-"""Dataset preparation: VisDrone2019-DET, the UAVDT frame subset, and zoom-aware training (ZT) crops.
+"""Dataset preparation: VisDrone2019-DET, the UAVDT frame subset, and zoom-aware training (Z_T, formerly ZT) crops.
 
 Every dataset ends up in the same YOLO layout:
     <root>/images/{train,val,test}/*.jpg
@@ -133,11 +133,11 @@ def prepare_uavdt(src, dst):
     return write_yaml(dst, UAVDT_NAMES)
 
 
-# ----------------------------------------------------------------------------------------- ZT
+# ----------------------------------------------------------------------------------------- Z_T (zoom-aware training)
 def make_zt_dataset(src, dst, imgsz=896, window=0.6, min_count=8, min_visible=0.5):
-    """Zoom-aware training set: all training images plus one dense crop per image where possible.
+    """Zoom-aware training set (Z_T): all training images plus one dense crop per image where possible.
 
-    The crop is chosen from ground-truth boxes with the same rule as Z1* at test time (60% window,
+    The crop is chosen from ground-truth boxes with the same rule as Z_S at test time (60% window,
     at least eight small objects), cut from the original image and saved as a new training sample;
     boxes keeping at least half of their area are retained. val/test are symlinked unchanged.
     Returns (n_images, n_crops); train the result for E_base * n_images / (n_images + n_crops) epochs.

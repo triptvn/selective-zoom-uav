@@ -1,10 +1,13 @@
-"""Self-guided selective zoom (Z1*) and uniform slicing (SAHI-style) for any detector.
+"""Self-guided selective zoom (Z_S in the paper) and uniform slicing (SAHI-style) for any detector.
 
 A detector is anything with an Ultralytics-like `predict(images, imgsz=..., conf=..., max_det=...)`
 that returns results with `.boxes.xyxy / .conf / .cls`. Ultralytics models (PyTorch, TensorRT, NCNN,
 ONNX) work as they are; D-FINE goes through `tinyuav.dfine.DFine`.
 
 All boxes are in original-image pixels. A detection set is a tuple (xyxy [N,4], score [N], cls [N]).
+
+Notation: during the experiments the zoom was called Z1*, the P5-free detector A1 and zoom-aware training ZT;
+the paper uses Z_S, Y_F and Z_T. The command-line tools accept the old mode names (z1, z1k2) as aliases.
 """
 from __future__ import annotations
 
@@ -15,6 +18,13 @@ import torch
 from torchvision.ops import batched_nms
 
 EMPTY = (np.zeros((0, 4), np.float32), np.zeros(0, np.float32), np.zeros(0, np.int64))
+
+# inference modes of the tools; the left-hand names were used during the experiments
+MODE_ALIASES = {"z1": "zs", "z1k2": "zs_k2", "z1_prev": "zs_prev"}
+
+
+def canonical_mode(name):
+    return MODE_ALIASES.get(name, name)
 
 
 @dataclass
@@ -144,9 +154,9 @@ def fuse(global_dets, window_dets, nms_iou=0.6, max_det=500):
 
 
 class SelectiveZoom:
-    """Z1*: one full-view pass, then at most k zoom passes on dense small-object windows.
+    """Z_S: one full-view pass, then at most k zoom passes on dense small-object windows.
 
-    >>> z = SelectiveZoom(YOLO('a1zt.pt'))
+    >>> z = SelectiveZoom(YOLO('yfzt.pt'))
     >>> boxes, scores, classes = z(cv2.imread('img.jpg'))
     `z.calls` counts detector calls since construction (1 + number of opened windows per image).
     """

@@ -3,9 +3,10 @@
 Inputs are JSON files written by tools/evaluate.py; a glob pattern selects the seeds of one arm.
 
   # two arms, Welch t-test (unequal variances) on AP50 of a given mode
-  python tools/stats.py welch "results/a1zt_s*_test.json" "results/base_s*_test.json" --mode z1
-  # same trained models, Z1* versus single pass, paired t-test over all files
-  python tools/stats.py paired "results/*_test.json" --mode z1 --ref single
+  python tools/stats.py welch "results/yfzt_s*_test.json" "results/base_s*_test.json" --mode zs
+  # same trained models, Z_S versus single pass, paired t-test over all files
+  python tools/stats.py paired "results/*_test.json" --mode zs --ref single
+Mode names follow tools/evaluate.py; results written with the old names (z1, z1k2) are read as well.
 """
 import argparse
 import glob
@@ -13,6 +14,9 @@ import json
 
 import numpy as np
 from scipy import stats
+
+import _path  # noqa: F401
+from tinyuav.zoom import canonical_mode
 
 ap = argparse.ArgumentParser()
 ap.add_argument("test", choices=["welch", "paired"])
@@ -22,13 +26,18 @@ ap.add_argument("--mode", default="single")
 ap.add_argument("--ref", default="single", help="paired: mode to compare against")
 ap.add_argument("--metric", default="mAP50")
 args = ap.parse_args()
+args.mode, args.ref = canonical_mode(args.mode), canonical_mode(args.ref)
 
 
 def load(pattern):
     files = sorted(glob.glob(pattern))
     if not files:
         raise SystemExit(f"no files match {pattern}")
-    return [json.load(open(f))["modes"] for f in files]
+    runs = []
+    for f in files:
+        modes = json.load(open(f))["modes"]
+        runs.append({canonical_mode(k): v for k, v in modes.items()})
+    return runs
 
 
 if args.test == "welch":

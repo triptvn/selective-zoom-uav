@@ -1,12 +1,12 @@
-"""Z1* on video with one detector call per frame.
+"""Z_S (selective zoom) on video with one detector call per frame.
 
 The zoom window of frame t is chosen from the detections of frame t-1, so it can be batched with the
 full view of frame t. Compared on consecutive UAVDT test frames:
   single     full view only
-  z1         window chosen from the current frame (two calls)
-  z1_prev    window chosen from the previous frame, batched with the full view (one call, batch 2)
+  zs         window chosen from the current frame (two calls)
+  zs_prev    window chosen from the previous frame, batched with the full view (one call, batch 2)
 
-  python tools/evaluate_video.py --weights a1zt_uavdt.pt --root /path/to/UAVDT-DET-ig --seqs 20 --frames 150
+  python tools/evaluate_video.py --weights yfzt_uavdt.pt --root /path/to/UAVDT-DET-ig --seqs 20 --frames 150
 (the paper uses all test sequences: 5,932 frames)
 """
 import argparse
@@ -58,7 +58,7 @@ gt = {"images": images, "annotations": anns, "categories": [{"id": i, "name": n}
 
 model = YOLO(args.weights)
 cfg = zoom.ZoomConfig(imgsz=args.imgsz)
-modes = {"single": [], "z1": [], "z1_prev": []}
+modes = {"single": [], "zs": [], "zs_prev": []}
 calls = dict.fromkeys(modes, 0)
 prev, prev_seq = None, None
 for im, q in zip(images, frames):
@@ -68,7 +68,7 @@ for im, q in zip(images, frames):
     seq = q.stem.split("_")[0]
     now = zoom.select_windows(g[0], g[1], w, h, cfg)
     before = zoom.select_windows(prev[0], prev[1], w, h, cfg) if prev is not None and seq == prev_seq else []
-    for m, wins, n_calls in (("single", [], 1), ("z1", now, 1 + len(now)), ("z1_prev", before, 1)):
+    for m, wins, n_calls in (("single", [], 1), ("zs", now, 1 + len(now)), ("zs_prev", before, 1)):
         modes[m] += coco_eval.to_coco(im["id"], zoom.fuse(g, zoom.run_windows(model, img, wins, args.imgsz)))
         calls[m] += n_calls
     prev, prev_seq = g, seq

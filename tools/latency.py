@@ -1,12 +1,13 @@
 """Full-pipeline latency at batch 1: pre-processing, detector calls, window selection and fusion.
-Image decoding is excluded. Each config is <mode>@<imgsz> with mode in {single, z1, z1k2, sahi}.
+Image decoding is excluded. Each config is <mode>@<imgsz> with mode in {single, zs, zs_k2, sahi}
+(zs = Z_S, the selective zoom; the old names z1 and z1k2 are accepted).
 
   # T4, PyTorch FP32 (zoom windows batched into one call)
-  python tools/latency.py --weights a1zt.pt --images data/VisDrone/images/test --configs single@896,single@1216,z1@896,sahi@896 --batched
+  python tools/latency.py --weights yfzt.pt --images data/VisDrone/images/test --configs single@896,single@1216,zs@896,sahi@896 --batched
   # T4, TensorRT FP16: engines from tools/export_trt.py
-  python tools/latency.py --weights a1zt.pt --engines engines.json --images ... --configs single@896,z1@896 --batched
+  python tools/latency.py --weights yfzt.pt --engines engines.json --images ... --configs single@896,zs@896 --batched
   # Raspberry Pi 5, NCNN (yolo export format=ncnn imgsz=896), sequential windows
-  python tools/latency.py --weights a1zt_ncnn_model --images ... --n 100 --warmup 10 --device cpu --configs single@896,z1@896
+  python tools/latency.py --weights yfzt_ncnn_model --images ... --n 100 --warmup 10 --device cpu --configs single@896,zs@896
 """
 import argparse
 import json
@@ -19,13 +20,13 @@ import _path  # noqa: F401
 ap = argparse.ArgumentParser()
 ap.add_argument("--weights", required=True)
 ap.add_argument("--images", required=True)
-ap.add_argument("--configs", default="single@896,z1@896,z1k2@896,sahi@896")
+ap.add_argument("--configs", default="single@896,zs@896,zs_k2@896,sahi@896")
 ap.add_argument("--n", type=int, default=300)
 ap.add_argument("--warmup", type=int, default=20)
 ap.add_argument("--batched", action="store_true", help="run all windows of an image in one detector call")
 ap.add_argument("--half", action="store_true")
 ap.add_argument("--device", default=None)
-ap.add_argument("--engines", default=None, help='JSON {"896": "a1zt_896.engine", ...}')
+ap.add_argument("--engines", default=None, help='JSON {"896": "yfzt_896.engine", ...}')
 ap.add_argument("--out", default=None)
 args = ap.parse_args()
 
@@ -62,7 +63,7 @@ def run(cfg, img):
     if mode == "single":
         sync()
         return time.perf_counter() - t0, 0
-    zc = zoom.ZoomConfig(imgsz=sz, k=2 if mode == "z1k2" else 1)
+    zc = zoom.ZoomConfig(imgsz=sz, k=2 if mode == "zs_k2" else 1)
     wins = zoom.tile_windows(w, h) if mode == "sahi" else zoom.select_windows(g[0], g[1], w, h, zc)
     wd = zoom.run_windows(m, img, wins, sz, batched=args.batched, **kw)
     zoom.fuse(g, wd)
@@ -73,6 +74,8 @@ def run(cfg, img):
 res = {"weights": args.weights, "device": torch.cuda.get_device_name(0) if cuda else "cpu", "half": args.half,
        "batched": args.batched, "engines": sorted(engines), "n": len(imgs) - args.warmup, "configs": {}, "errors": {}}
 for cfg in args.configs.split(","):
+    m, sz = cfg.split("@")
+    cfg = f"{zoom.canonical_mode(m)}@{sz}"
     try:
         for img in imgs[:args.warmup]:
             run(cfg, img)

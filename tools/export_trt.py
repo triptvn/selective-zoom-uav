@@ -1,11 +1,15 @@
 """Export TensorRT FP16 engines, one per input size, and write {imgsz: engine} for tools/latency.py.
 
-  python tools/export_trt.py --weights a1zt.pt --sizes 896 1344 --out engines.json
+  python tools/export_trt.py --weights yfzt.pt --sizes 896 1344 --out engines.json
 
-Each engine is test-run with batch 1 and 2 after export; if that fails, simpler export settings are
-tried in turn, ending with a fixed batch-1 engine (enough for single pass and Z1* with K=1).
-Note: for the P5-free model, engines at 1088-1536 px passed export but failed at run time in our
-setup (TensorRT through Ultralytics 8.4.131 on a T4), so the paper reports TensorRT only at 896 and 1344.
+Each engine is test-run after export (square and letterboxed inputs, batch 1 and 2); if that fails,
+simpler export settings are tried in turn, ending with a fixed batch-1 engine.
+
+P5-free models: Ultralytics stores the largest head stride (16) in the engine metadata, so letterboxed
+inputs are padded to multiples of 16 (e.g. 1088 x 624). The backbone still has a stride-32 stage, and
+heights that are not multiples of 32 break the top-down concat inside the engine. PyTorch inference is
+unaffected because Ultralytics always pads .pt models to multiples of 32. We rewrite the stride in the
+engine metadata to 32 after export.
 """
 import argparse
 import json
@@ -26,11 +30,22 @@ ATTEMPTS = [dict(dynamic=True, batch=4), dict(dynamic=True, batch=4, simplify=Fa
             dict(dynamic=True, batch=2, simplify=False), dict(dynamic=False, batch=1)]
 
 
+def fix_stride(engine):
+    d = Path(engine).read_bytes()
+    n = int.from_bytes(d[:4], "little")
+    meta = json.loads(d[4:4 + n])
+    if int(meta.get("stride", 32)) < 32:
+        meta["stride"] = 32
+        m = json.dumps(meta).encode()
+        Path(engine).write_bytes(len(m).to_bytes(4, "little") + m + d[4 + n:])
+
+
 def works(engine, sz, two):
     try:
         m = YOLO(engine, task="detect")
         im = np.zeros((sz, sz, 3), np.uint8)
         m.predict(im, imgsz=sz, verbose=False)
+        m.predict(np.zeros((sz * 9 // 16, sz, 3), np.uint8), imgsz=sz, verbose=False)
         if two:
             m.predict([im, im], imgsz=sz, verbose=False)
         return True
@@ -51,6 +66,7 @@ for sz in args.sizes:
         except Exception as ex:
             print(f"export {sz} {kw} failed: {repr(ex)[:200]}")
             continue
+        fix_stride(e)
         if works(e, sz, kw["dynamic"]):
             out[sz] = e
             break

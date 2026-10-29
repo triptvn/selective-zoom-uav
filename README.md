@@ -8,34 +8,48 @@ budget, a detector can enlarge the whole image, slice it into tiles, zoom into s
 switch to a larger network. This repository contains the pipeline we used to compare these options
 at equal FLOPs and equal measured latency:
 
-- **Z1\* (self-guided selective zoom).** One full-view pass, then at most one zoom pass on the
+- **Z<sub>S</sub> (self-guided selective zoom).** One full-view pass, then at most one zoom pass on the
   densest window of the detector's own confident small detections. No extra parameters and no
   retraining, so it works on top of any detector (we tested ten, including D-FINE).
-- **ZT (zoom-aware training).** Ground-truth dense crops chosen with the same rule as Z1\* are added
+- **Z<sub>T</sub> (zoom-aware training).** Ground-truth dense crops chosen with the same rule as Z<sub>S</sub> are added
   to the training set, with the number of epochs reduced so that the optimizer steps match the baseline.
-- **A1.** YOLO26n-P2 without the stride-32 head: 1.74 M parameters, 28% fewer than YOLO26n-P2.
+- **Y<sub>F</sub>.** YOLO26n-P2 without the stride-32 head: 1.74 M parameters, 28% fewer than YOLO26n-P2.
+
+### Notation
+
+The experiments used shorter working names, which still appear in some file names, run names and
+command-line options. The paper uses the names on the left.
+
+| Paper | Name during the experiments | In this code |
+|---|---|---|
+| Y<sub>F</sub> (P5-free YOLO26n-P2) | A1 | `configs/yolo26n-p2-noP5.yaml` |
+| Z<sub>S</sub> (selective zoom) | Z1\* | mode `zs` (old name `z1`); `zs_k2` for two windows (old `z1k2`) |
+| Z<sub>T</sub> (zoom-aware training) | ZT | `prepare_data.py zt` |
+| Y<sub>F</sub> + Z<sub>T</sub> (proposed detector) | A1 + ZT | run and weight names `yfzt*` (`a1zt*` in our logs) |
+
+The tools accept the old mode names, so commands and result files from before the renaming still work.
 
 ## Main results
 
 VisDrone2019-DET test-dev, COCO AP50 (max. 500 detections, one label per box, image-wise), mean ± std
 over three seeds. Latency: full pipeline, batch 1, Tesla T4.
 
-| Detector | Params | Single pass | + Z1\* | Calls / image | PyTorch ms (single / Z1\*) |
+| Detector | Params | Single pass | + Z<sub>S</sub> | Calls / image | PyTorch ms (single / Z<sub>S</sub>) |
 |---|---|---|---|---|---|
 | YOLOv10n | 2.27 M | 34.34 ± 0.09 | 38.62 | 1.85 | 10.8 / 23.2 |
 | YOLO26n-P2 (baseline) | 2.40 M | 35.00 ± 0.14 | 38.74 ± 0.06 | 1.87 | 14.5 / 31.4 |
-| **A1 + ZT (proposed)** | **1.74 M** | **35.49 ± 0.15** | **40.02 ± 0.10** | 1.87 | 13.5 / 28.6 |
+| **Y<sub>F</sub> + Z<sub>T</sub> (proposed)** | **1.74 M** | **35.49 ± 0.15** | **40.02 ± 0.10** | 1.87 | 13.5 / 28.6 |
 
-- The proposed detector with a 1216 px full view and Z1\* reaches 43.11 AP50.
-- Z1\* adds 3.0 to 5.3 AP50 to each of the nine other detectors we tested. It improved all 54
+- The proposed detector with a 1216 px full view and Z<sub>S</sub> reaches 43.11 AP50.
+- Z<sub>S</sub> adds 3.0 to 5.3 AP50 to each of the nine other detectors we tested. It improved all 54
   training runs on VisDrone and UAVDT.
-- On a Raspberry Pi 5 (CPU, NCNN), the proposed pipeline with Z1\* reaches 38.92 AP50 in 415 ms.
+- On a Raspberry Pi 5 (CPU, NCNN), the proposed pipeline with Z<sub>S</sub> reaches 38.92 AP50 in 415 ms.
   A single pass of YOLO26s-P2 (9.41 M parameters) reaches 37.89 in 528 ms.
 
 ## Installation
 
 ```bash
-git clone <repository-url> && cd <repository>
+git clone https://github.com/triptvn/selective-zoom-uav.git && cd selective-zoom-uav
 pip install -r requirements.txt
 ```
 
@@ -71,7 +85,7 @@ All detectors use one recipe: 896 px, batch 8, COCO initialisation, and MuSGD wi
 learning rate of 0.01. We train for 100 epochs on VisDrone and 50 on UAVDT.
 
 ```bash
-# proposed detector (A1 + ZT)
+# proposed detector (Y_F + Z_T)
 python tools/train.py --model configs/yolo26n-p2-noP5.yaml --data data/VisDrone_ZT/data.yaml --epochs 54 --seed 0
 # baseline and other detectors
 python tools/train.py --model yolo26n-p2.yaml --data data/VisDrone/data.yaml --epochs 100 --seed 0
@@ -80,14 +94,14 @@ python tools/train.py --model yolov10n.yaml   --data data/VisDrone/data.yaml --e
 python tools/train.py --model yolo26n-p2.yaml --data data/VisDrone/data.yaml --epochs 50 --stal-floor 16
 ```
 
-## Using Z1\* in your own code
+## Using Z<sub>S</sub> in your own code
 
 ```python
 import cv2
 from ultralytics import YOLO
 from tinyuav import SelectiveZoom, ZoomConfig
 
-zoom = SelectiveZoom(YOLO("a1zt.pt"), ZoomConfig(imgsz=896))   # defaults are the paper's settings
+zoom = SelectiveZoom(YOLO("yfzt.pt"), ZoomConfig(imgsz=896))   # defaults are the paper's settings
 boxes, scores, classes = zoom(cv2.imread("frame.jpg"))         # original-image pixels
 ```
 
@@ -107,13 +121,13 @@ Raising `min_count` skips more zoom passes and lowers the cost. Use `k=2` for tw
 
 ```bash
 # accuracy of inference modes on one split (writes AP50, AP50:95, P, R, size buckets, per-class AP)
-python tools/evaluate.py --weights a1zt.pt --data data/VisDrone/data.yaml --split test --modes single,z1,z1k2,sahi --out results/a1zt_test.json
+python tools/evaluate.py --weights yfzt.pt --data data/VisDrone/data.yaml --split test --modes single,zs,zs_k2,sahi --out results/yfzt_test.json
 # whole-image upscaling
-python tools/evaluate.py --weights a1zt.pt --data data/VisDrone/data.yaml --imgsz 1216 --modes single,z1
+python tools/evaluate.py --weights yfzt.pt --data data/VisDrone/data.yaml --imgsz 1216 --modes single,zs
 # window-selection study (random / centre / ground-truth oracle windows)
-python tools/evaluate.py --weights base.pt --data data/VisDrone/data.yaml --modes z1,random,center,oracle
+python tools/evaluate.py --weights base.pt --data data/VisDrone/data.yaml --modes zs,random,center,oracle
 # significance over seeds
-python tools/stats.py welch "results/a1zt_s?_test.json" "results/base_s?_test.json" --mode z1
+python tools/stats.py welch "results/yfzt_s?_test.json" "results/base_s?_test.json" --mode zs
 ```
 
 We report COCO AP50 with up to 500 detections per image and one label per box, and do not rank
@@ -123,9 +137,9 @@ which lets one box score for several classes. Detectors that use NMS gain about 
 ## Latency
 
 ```bash
-scripts/latency_t4.sh a1zt.pt     # PyTorch FP32 and TensorRT FP16 on a GPU
-scripts/edge_pi5.sh a1zt.pt       # NCNN on a Raspberry Pi 5, run on the board
-python tools/evaluate_video.py --weights a1zt_uavdt.pt --root /path/to/UAVDT-DET-ig   # window from the previous frame
+scripts/latency_t4.sh yfzt.pt     # PyTorch FP32 and TensorRT FP16 on a GPU
+scripts/edge_pi5.sh yfzt.pt       # NCNN on a Raspberry Pi 5, run on the board
+python tools/evaluate_video.py --weights yfzt_uavdt.pt --root /path/to/UAVDT-DET-ig   # window from the previous frame
 ```
 
 Latency covers pre-processing, detector calls, window selection and fusion. It excludes image
@@ -146,8 +160,8 @@ For D-FINE-N we used the official repository (commit `956d170`), adapted to 896 
 ## Repository layout
 
 ```
-configs/      A1 model (yolo26n-p2-noP5.yaml) and the YOLO11n-P2 baseline
-tinyuav/      zoom.py (Z1*, tiles, fusion), data.py (datasets, ZT crops), coco_eval.py,
+configs/      Y_F model (yolo26n-p2-noP5.yaml) and the YOLO11n-P2 baseline
+tinyuav/      zoom.py (Z_S, tiles, fusion), data.py (datasets, Z_T crops), coco_eval.py,
               stal.py (P2-aware STAL), dfine.py (D-FINE wrapper)
 tools/        prepare_data, train, evaluate, evaluate_video, latency, export_trt, stats
 scripts/      end-to-end commands for VisDrone, UAVDT, GPU latency and Raspberry Pi 5
